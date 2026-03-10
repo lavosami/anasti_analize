@@ -8,6 +8,14 @@ Service for dataset analysis in the Anasti project.
 uvicorn main:app --reload
 ```
 
+Set `JWT_SECRET` to the same value used by the `auth` service. Protected endpoints also support `JWT_ALGORITHM` and default it to `HS256`.
+
+## Auth
+
+All non-root endpoints require `Authorization: Bearer <access-token>`.
+
+This service does not persist datasets. It only processes the request payload in memory.
+
 ## API
 
 ### `POST /analysis`

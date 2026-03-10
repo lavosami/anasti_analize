@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.schemas import AnalysisData, AnalysisResponse, GroupedData
 from app.api.utils import build_group_analyses, rows_from_data, summarize_dataset
+from app.core.deps import require_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_current_user)])
 
 
 @router.post("/analysis", response_model=AnalysisResponse)
