@@ -1,7 +1,16 @@
 from typing import Any
 
 from app.api.schemas import AnalysisData, AnalysisResponse, GroupedData
-from app.api.utils import build_group_analyses, compute_category_params, compute_correlation_matrix, compute_number_params, rows_from_data, summarize_dataset
+from app.api.utils import (
+    build_group_analyses,
+    compute_category_params,
+    compute_correlation_matrix,
+    compute_number_params,
+    is_date_field,
+    parse_datetime,
+    rows_from_data,
+    summarize_dataset,
+)
 
 
 def build_analysis(data: AnalysisData | dict[str, Any]) -> dict[str, Any]:
@@ -11,16 +20,20 @@ def build_analysis(data: AnalysisData | dict[str, Any]) -> dict[str, Any]:
 
     if payload.target:
         groups = group_rows({"data": payload.data, "target": payload.target})
-        response.groups = build_group_analyses(groups)
+        response.groups = build_group_analyses_nested(groups)
 
     return response.model_dump(mode="json")
 
 
-def group_rows(data: GroupedData | dict[str, Any]) -> dict[str, list[dict]]:
+def group_rows(data: GroupedData | dict[str, Any]) -> dict[str, list[dict]] | dict[str, dict[str, list[dict]]]:
     payload = data if isinstance(data, GroupedData) else GroupedData(**data)
+    rows = rows_from_data(payload.data)
+    if is_date_field(rows, payload.target):
+        return group_rows_by_date(rows, payload.target)
+
     groups: dict[str, list[dict]] = {}
 
-    for row in rows_from_data(payload.data):
+    for row in rows:
         target_value = row.get(payload.target)
         if target_value is None:
             continue
@@ -44,3 +57,42 @@ def correlation_parameters(data: Any) -> dict[str, Any]:
     rows = rows_from_data(data)
     matrix = compute_correlation_matrix(rows)
     return {"matrix": matrix}
+
+
+def build_group_analyses_nested(
+    groups: dict[str, list[dict]] | dict[str, dict[str, list[dict]]],
+) -> dict[str, GroupAnalysis] | dict[str, dict[str, GroupAnalysis]]:
+    sample = next(iter(groups.values()), None)
+    if isinstance(sample, list):
+        return build_group_analyses(groups)  # type: ignore[arg-type]
+
+    grouped: dict[str, dict[str, GroupAnalysis]] = {}
+    for bucket, bucket_groups in groups.items():
+        grouped[bucket] = build_group_analyses(bucket_groups)
+    return grouped
+
+
+def group_rows_by_date(rows: list[dict], field: str) -> dict[str, dict[str, list[dict]]]:
+    hour_groups: dict[str, list[dict]] = {}
+    weekday_groups: dict[str, list[dict]] = {}
+    month_groups: dict[str, list[dict]] = {}
+
+    for row in rows:
+        raw = row.get(field)
+        parsed = parse_datetime(raw)
+        if not parsed:
+            continue
+
+        hour_key = f"{parsed.hour:02d}"
+        weekday_key = str(parsed.weekday())
+        month_key = str(parsed.month)
+
+        hour_groups.setdefault(hour_key, []).append(row)
+        weekday_groups.setdefault(weekday_key, []).append(row)
+        month_groups.setdefault(month_key, []).append(row)
+
+    return {
+        "hour": hour_groups,
+        "weekday": weekday_groups,
+        "month": month_groups,
+    }

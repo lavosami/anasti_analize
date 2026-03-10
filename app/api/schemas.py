@@ -53,4 +53,4 @@ class GroupAnalysis(BaseModel):
 
 class AnalysisResponse(BaseModel):
     summary: SummaryData
-    groups: dict[str, GroupAnalysis] | None = None
+    groups: dict[str, GroupAnalysis] | dict[str, dict[str, GroupAnalysis]] | None = None
