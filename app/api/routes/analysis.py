@@ -19,7 +19,7 @@ async def analysis(data: AnalysisData) -> AnalysisResponse:
 
 
 @router.post("/get-groups")
-async def get_groups(data: GroupedData) -> dict[str, list[dict]]:
+async def get_groups(data: GroupedData) -> dict[str, list[dict]] | dict[str, dict[str, list[dict]]]:
     """
     Get groups by target variable
 

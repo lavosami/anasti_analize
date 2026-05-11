@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.api.schemas import AnalysisData, AnalysisResponse, GroupedData
+from app.api.schemas import AnalysisData, AnalysisResponse, GroupAnalysis, GroupedData
 from app.api.utils import (
     build_group_analyses,
     compute_category_params,
@@ -73,9 +73,12 @@ def build_group_analyses_nested(
 
 
 def group_rows_by_date(rows: list[dict], field: str) -> dict[str, dict[str, list[dict]]]:
-    hour_groups: dict[str, list[dict]] = {}
+    time_groups: dict[str, list[dict]] = {}
     weekday_groups: dict[str, list[dict]] = {}
+    month_day_groups: dict[str, list[dict]] = {}
     month_groups: dict[str, list[dict]] = {}
+    quarter_groups: dict[str, list[dict]] = {}
+    year_groups: dict[str, list[dict]] = {}
 
     for row in rows:
         raw = row.get(field)
@@ -83,16 +86,27 @@ def group_rows_by_date(rows: list[dict], field: str) -> dict[str, dict[str, list
         if not parsed:
             continue
 
-        hour_key = f"{parsed.hour:02d}"
+        time_key = f"{parsed.hour:02d}:{parsed.minute:02d}"
         weekday_key = str(parsed.weekday())
+        month_day_key = str(parsed.day)
         month_key = str(parsed.month)
+        quarter_key = str(((parsed.month - 1) // 3) + 1)
+        year_key = str(parsed.year)
 
-        hour_groups.setdefault(hour_key, []).append(row)
+        time_groups.setdefault(time_key, []).append(row)
         weekday_groups.setdefault(weekday_key, []).append(row)
+        month_day_groups.setdefault(month_day_key, []).append(row)
         month_groups.setdefault(month_key, []).append(row)
+        quarter_groups.setdefault(quarter_key, []).append(row)
+        year_groups.setdefault(year_key, []).append(row)
 
-    return {
-        "hour": hour_groups,
+    buckets = {
+        "time": time_groups,
         "weekday": weekday_groups,
+        "month_day": month_day_groups,
         "month": month_groups,
+        "quarter": quarter_groups,
+        "year": year_groups,
     }
+
+    return {bucket: groups for bucket, groups in buckets.items() if len(groups) > 1}
