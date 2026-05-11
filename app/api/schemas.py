@@ -29,6 +29,7 @@ class NumberParams(BaseModel):
 class CategoryParams(BaseModel):
     top_values: list[dict[str, Any]]
     unique_values: list[Any]
+    total_count: int = Field(ge=0)
 
 
 class ValuesData(BaseModel):

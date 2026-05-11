@@ -1,9 +1,12 @@
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from math import isfinite, sqrt
+import re
 from typing import Any
 
 from app.api.schemas import CategoryParams, GroupAnalysis, NumberParams, SummaryData
+
+NUMBER_PATTERN = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$")
 
 
 def rows_from_data(data: Any) -> list[dict]:
@@ -14,7 +17,86 @@ def rows_from_data(data: Any) -> list[dict]:
     else:
         rows = []
 
-    return [row for row in rows if isinstance(row, dict)]
+    return sort_rows_by_detected_date([row for row in rows if isinstance(row, dict)])
+
+
+def sort_rows_by_detected_date(rows: list[dict]) -> list[dict]:
+    date_field = find_date_sort_field(rows)
+    if not date_field:
+        return rows
+
+    def sort_key(item: tuple[int, dict]) -> tuple[int, float, int]:
+        index, row = item
+        parsed = parse_datetime(row.get(date_field))
+        if parsed is None:
+            return (1, 0, index)
+        return (0, parsed.timestamp(), index)
+
+    return [row for _, row in sorted(enumerate(rows), key=sort_key)]
+
+
+def find_date_sort_field(rows: list[dict]) -> str | None:
+    columns: list[str] = []
+    seen_columns: set[str] = set()
+
+    for row in rows:
+        for column in row:
+            if column not in seen_columns:
+                columns.append(column)
+                seen_columns.add(column)
+
+    selected_field: str | None = None
+    selected_ratio = 0.0
+
+    for column in columns:
+        present_count = 0
+        parsed_count = 0
+
+        for row in rows:
+            value = row.get(column)
+            if value is None or value == "":
+                continue
+            present_count += 1
+            if parse_datetime(value):
+                parsed_count += 1
+
+        ratio = parsed_count / present_count if present_count else 0
+        if (
+            present_count >= 2
+            and parsed_count >= 2
+            and ratio >= 0.6
+            and ratio > selected_ratio
+        ):
+            selected_field = column
+            selected_ratio = ratio
+
+    return selected_field
+
+
+def normalize_number_text(value: str) -> str:
+    compact = "".join(value.split())
+    if "," in compact and "." in compact:
+        if compact.rfind(",") > compact.rfind("."):
+            return compact.replace(".", "").replace(",", ".")
+        return compact.replace(",", "")
+    if "," in compact:
+        return compact.replace(",", ".", 1)
+    return compact
+
+
+def parse_numeric_value(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+        return numeric if isfinite(numeric) else None
+    if isinstance(value, str):
+        normalized = normalize_number_text(value.strip())
+        if not normalized or not NUMBER_PATTERN.fullmatch(normalized):
+            return None
+        numeric = float(normalized)
+        return numeric if isfinite(numeric) else None
+    return None
 
 
 def split_columns(rows: list[dict]) -> tuple[dict[str, list[float]], dict[str, list[Any]]]:
@@ -28,8 +110,9 @@ def split_columns(rows: list[dict]) -> tuple[dict[str, list[float]], dict[str, l
             if isinstance(value, bool):
                 categorical.setdefault(key, []).append(value)
                 continue
-            if isinstance(value, (int, float)) and isfinite(float(value)):
-                numeric.setdefault(key, []).append(float(value))
+            numeric_value = parse_numeric_value(value)
+            if numeric_value is not None:
+                numeric.setdefault(key, []).append(numeric_value)
             else:
                 categorical.setdefault(key, []).append(value)
 
@@ -88,7 +171,7 @@ def infer_column_types(rows: list[dict]) -> dict[str, str]:
             stats[key]["total"] += 1
             if isinstance(value, bool):
                 continue
-            if isinstance(value, (int, float)) and isfinite(float(value)):
+            if parse_numeric_value(value) is not None:
                 stats[key]["numeric"] += 1
                 continue
             if parse_datetime(value):
@@ -126,9 +209,9 @@ def is_date_field(rows: list[dict], field: str) -> bool:
 
 def compute_number_params(values: list[Any]) -> NumberParams | None:
     cleaned = [
-        float(v)
+        numeric
         for v in values
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and isfinite(float(v))
+        if (numeric := parse_numeric_value(v)) is not None
     ]
     if not cleaned:
         return None
@@ -155,16 +238,26 @@ def compute_number_params(values: list[Any]) -> NumberParams | None:
     )
 
 
-def compute_category_params(values: list[Any], top_n: int = 5) -> CategoryParams:
+def compute_category_params(values: list[Any]) -> CategoryParams:
     cleaned = [v for v in values if v is not None]
     counts = Counter(cleaned)
+    total_count = len(cleaned)
 
     top_values = [
-        {"value": value, "count": count} for value, count in counts.most_common(top_n)
+        {
+            "value": value,
+            "count": count,
+            "percentage": count / total_count * 100 if total_count else 0,
+        }
+        for value, count in counts.most_common()
     ]
     unique_values = list(counts.keys())
 
-    return CategoryParams(top_values=top_values, unique_values=unique_values)
+    return CategoryParams(
+        top_values=top_values,
+        unique_values=unique_values,
+        total_count=total_count,
+    )
 
 
 def pearson_correlation(xs: list[float], ys: list[float]) -> float | None:
@@ -274,7 +367,7 @@ def compute_correlation_matrix(rows: list[dict]) -> dict[str, dict[str, float | 
                 conv_b: float | str | None
 
                 if type_a == "numeric":
-                    conv_a = float(val_a) if isinstance(val_a, (int, float)) and not isinstance(val_a, bool) and isfinite(float(val_a)) else None
+                    conv_a = parse_numeric_value(val_a)
                 elif type_a == "datetime":
                     parsed = parse_datetime(val_a)
                     conv_a = parsed.timestamp() if parsed else None
@@ -282,7 +375,7 @@ def compute_correlation_matrix(rows: list[dict]) -> dict[str, dict[str, float | 
                     conv_a = str(val_a)
 
                 if type_b == "numeric":
-                    conv_b = float(val_b) if isinstance(val_b, (int, float)) and not isinstance(val_b, bool) and isfinite(float(val_b)) else None
+                    conv_b = parse_numeric_value(val_b)
                 elif type_b == "datetime":
                     parsed = parse_datetime(val_b)
                     conv_b = parsed.timestamp() if parsed else None

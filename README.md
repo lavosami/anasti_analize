@@ -46,12 +46,20 @@ Response:
     },
     "categorical": {
       "city": {
-        "top_values": [{"value": "Moscow", "count": 2}, {"value": "SPB", "count": 1}],
-        "unique_values": ["Moscow", "SPB"]
+        "top_values": [
+          {"value": "Moscow", "count": 2, "percentage": 66.66666666666666},
+          {"value": "SPB", "count": 1, "percentage": 33.33333333333333}
+        ],
+        "unique_values": ["Moscow", "SPB"],
+        "total_count": 3
       },
       "segment": {
-        "top_values": [{"value": "A", "count": 2}, {"value": "B", "count": 1}],
-        "unique_values": ["A", "B"]
+        "top_values": [
+          {"value": "A", "count": 2, "percentage": 66.66666666666666},
+          {"value": "B", "count": 1, "percentage": 33.33333333333333}
+        ],
+        "unique_values": ["A", "B"],
+        "total_count": 3
       }
     },
     "correlation": {
@@ -73,12 +81,14 @@ Response:
         },
         "categorical": {
           "city": {
-            "top_values": [{"value": "Moscow", "count": 2}],
-            "unique_values": ["Moscow"]
+            "top_values": [{"value": "Moscow", "count": 2, "percentage": 100.0}],
+            "unique_values": ["Moscow"],
+            "total_count": 2
           },
           "segment": {
-            "top_values": [{"value": "A", "count": 2}],
-            "unique_values": ["A"]
+            "top_values": [{"value": "A", "count": 2, "percentage": 100.0}],
+            "unique_values": ["A"],
+            "total_count": 2
           }
         },
         "correlation": {
@@ -99,12 +109,14 @@ Response:
         },
         "categorical": {
           "city": {
-            "top_values": [{"value": "SPB", "count": 1}],
-            "unique_values": ["SPB"]
+            "top_values": [{"value": "SPB", "count": 1, "percentage": 100.0}],
+            "unique_values": ["SPB"],
+            "total_count": 1
           },
           "segment": {
-            "top_values": [{"value": "B", "count": 1}],
-            "unique_values": ["B"]
+            "top_values": [{"value": "B", "count": 1, "percentage": 100.0}],
+            "unique_values": ["B"],
+            "total_count": 1
           }
         },
         "correlation": {
@@ -189,11 +201,12 @@ Response:
 {
   "params": {
     "top_values": [
-      {"value": "A", "count": 2},
-      {"value": "B", "count": 1},
-      {"value": "C", "count": 1}
+      {"value": "A", "count": 2, "percentage": 50.0},
+      {"value": "B", "count": 1, "percentage": 25.0},
+      {"value": "C", "count": 1, "percentage": 25.0}
     ],
-    "unique_values": ["A", "B", "C"]
+    "unique_values": ["A", "B", "C"],
+    "total_count": 4
   }
 }
 ```
